@@ -11,6 +11,8 @@ module Parity
       @from, @to = args.values_at(:from, :to)
       @additional_args = args[:additional_args] || BLANK_ARGUMENTS
       @parallelize = args[:parallelize] || false
+      @backup_id = args[:backup_id]
+      @backup_url = args[:backup_url]
     end
 
     def restore
@@ -25,7 +27,8 @@ module Parity
 
     private
 
-    attr_reader :additional_args, :from, :to, :parallelize
+    attr_reader :additional_args, :backup_id, :backup_url, :from, :to,
+                :parallelize
 
     alias :parallelize? :parallelize
 
@@ -77,21 +80,43 @@ module Parity
     end
 
     def download_remote_backup
+      if backup_url
+        download_from_url
+      elsif backup_id
+        download_backup_by_id
+      else
+        download_latest_backup
+      end
+    end
+
+    def download_from_url
+      Kernel.system("curl -o tmp/parity.backup \"#{backup_url}\"")
+    end
+
+    def download_backup_by_id
       Kernel.system(
-        "curl -o tmp/latest.backup \"$(heroku pg:backups:url --remote #{from})\"",
+        "curl -o tmp/parity.backup "\
+          "\"$(heroku pg:backups:url #{backup_id} --remote #{from})\"",
+      )
+    end
+
+    def download_latest_backup
+      Kernel.system(
+        "curl -o tmp/parity.backup "\
+          "\"$(heroku pg:backups:url --remote #{from})\"",
       )
     end
 
     def restore_from_local_temp_backup
       Kernel.system(
-        "pg_restore tmp/latest.backup --verbose --no-acl --no-owner "\
+        "pg_restore tmp/parity.backup --verbose --no-acl --no-owner "\
           "--dbname #{development_db} --jobs=#{processor_cores} "\
           "#{additional_args}",
       )
     end
 
     def delete_local_temp_backup
-      Kernel.system("rm tmp/latest.backup")
+      Kernel.system("rm tmp/parity.backup")
     end
 
     def delete_rails_production_environment_settings

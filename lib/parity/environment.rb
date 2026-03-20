@@ -67,12 +67,14 @@ module Parity
         $stdout.puts "Parity does not support restoring backups into your "\
           "production environment. Use `--force` to override."
       else
-        Backup.new(
+        Backup.new(**{
           from: arguments.first,
           to: environment,
           parallelize: parallelize?,
+          backup_id: backup_id,
+          backup_url: backup_url,
           additional_args: additional_restore_arguments,
-        ).restore
+        }.compact).restore
       end
     end
 
@@ -90,9 +92,30 @@ module Parity
       arguments.include?("--parallelize")
     end
 
+    def backup_id
+      argument_value("--backup-id")
+    end
+
+    def backup_url
+      argument_value("--backup-url")
+    end
+
+    def argument_value(flag)
+      index = arguments.index(flag)
+      arguments[index + 1] if index
+    end
+
     def additional_restore_arguments
-      (arguments.drop(1) - ["--force", "--parallelize"] +
-        [restore_confirmation_argument]).compact.join(" ")
+      args = arguments.dup
+      # Remove the remote environment name
+      args = args.drop(1)
+      # Remove toggle options --force and --parallelize
+      args -= ["--force", "--parallelize"]
+      # Remove key/value options
+      args -= ["--backup-id", backup_id] if backup_id
+      args -= ["--backup-url", backup_url] if backup_url
+
+      (args + [restore_confirmation_argument]).compact.join(" ")
     end
 
     def restore_confirmation_argument

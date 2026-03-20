@@ -89,6 +89,18 @@ as a flag to the `development` or `production` commands:
     development restore-from production --parallelize
 ```
 
+When restoring to development, you can specify a specific backup using either:
+
+* `--backup-id` to download a specific backup by its Heroku backup ID:
+    ```shell
+    development restore production --backup-id a1234
+    ```
+
+* `--backup-url` to download from a specific URL (as returned by `heroku pg:backups:url`):
+    ```shell
+    development restore production --backup-url https://...
+    ```
+
 [2]: http://redis.io/commands
 
 Convention

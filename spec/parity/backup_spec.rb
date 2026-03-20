@@ -147,6 +147,103 @@ describe Parity::Backup do
       expect(Kernel).to have_received(:system).with(set_db_metadata_sql)
     end
 
+    it "downloads backup from URL when backup_url is specified" do
+      allow(IO).to receive(:read).and_return(database_fixture)
+      allow(Kernel).to receive(:system)
+      allow(Etc).to receive(:nprocessors).and_return(number_of_processes)
+
+      Parity::Backup.new(
+        from: "production",
+        to: "development",
+        backup_url: "https://example.com/backup.dump",
+        parallelize: true,
+      ).restore
+
+      expect(Kernel).
+        to have_received(:system).
+        with(make_temp_directory_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(download_from_url_command("https://example.com/backup.dump"))
+      expect(Kernel).
+        to have_received(:system).
+        with(drop_development_database_drop_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(create_heroku_ext_schema_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(restore_from_local_temp_backup_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(delete_local_temp_backup_command)
+    end
+
+    it "downloads specific backup by id when backup_id is specified" do
+      allow(IO).to receive(:read).and_return(database_fixture)
+      allow(Kernel).to receive(:system)
+      allow(Etc).to receive(:nprocessors).and_return(number_of_processes)
+
+      Parity::Backup.new(
+        from: "production",
+        to: "development",
+        backup_id: "a1234",
+        parallelize: true,
+      ).restore
+
+      expect(Kernel).
+        to have_received(:system).
+        with(make_temp_directory_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(download_backup_by_id_command(id: "a1234", remote: "production"))
+      expect(Kernel).
+        to have_received(:system).
+        with(drop_development_database_drop_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(create_heroku_ext_schema_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(restore_from_local_temp_backup_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(delete_local_temp_backup_command)
+    end
+
+    it "prefers backup_url over backup_id when both are specified" do
+      allow(IO).to receive(:read).and_return(database_fixture)
+      allow(Kernel).to receive(:system)
+      allow(Etc).to receive(:nprocessors).and_return(number_of_processes)
+
+      Parity::Backup.new(
+        from: "production",
+        to: "development",
+        backup_url: "https://example.com/backup.dump",
+        backup_id: "a1234",
+        parallelize: true,
+      ).restore
+
+      expect(Kernel).
+        to have_received(:system).
+        with(make_temp_directory_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(download_from_url_command("https://example.com/backup.dump"))
+      expect(Kernel).
+        not_to have_received(:system).
+        with(download_backup_by_id_command(id: "a1234", remote: "production"))
+      expect(Kernel).
+        to have_received(:system).
+        with(drop_development_database_drop_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(restore_from_local_temp_backup_command)
+      expect(Kernel).
+        to have_received(:system).
+        with(delete_local_temp_backup_command)
+    end
+
     it "is able to load a database.yml file containing top-level ERB" do
       allow(IO).to receive(:read).and_return(database_fixture_with_erb)
       allow(Kernel).to receive(:system)
@@ -254,12 +351,25 @@ describe Parity::Backup do
     "mkdir -p tmp"
   end
 
+  def copy_local_backup_command(source:)
+    "cp \"#{source}\" tmp/parity.backup"
+  end
+
   def download_remote_database_command
-    'curl -o tmp/latest.backup "$(heroku pg:backups:url --remote production)"'
+    'curl -o tmp/parity.backup "$(heroku pg:backups:url --remote production)"'
+  end
+
+  def download_from_url_command(url)
+    "curl -o tmp/parity.backup \"#{url}\""
+  end
+
+  def download_backup_by_id_command(id:, remote:)
+    "curl -o tmp/parity.backup "\
+      "\"$(heroku pg:backups:url #{id} --remote #{remote})\""
   end
 
   def restore_from_local_temp_backup_command(cores: number_of_processes)
-    "pg_restore tmp/latest.backup --verbose --no-acl --no-owner "\
+    "pg_restore tmp/parity.backup --verbose --no-acl --no-owner "\
       "--dbname #{default_db_name} --jobs=#{cores} "
   end
 
@@ -268,7 +378,7 @@ describe Parity::Backup do
   end
 
   def delete_local_temp_backup_command
-    "rm tmp/latest.backup"
+    "rm tmp/parity.backup"
   end
 
   def heroku_development_to_staging_passthrough(db_name: default_db_name)

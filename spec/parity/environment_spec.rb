@@ -194,6 +194,141 @@ RSpec.describe Parity::Environment do
     expect(backup).to have_received(:restore)
   end
 
+  it "passes backup_id when --backup-id is specified" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      ["restore", "production", "--backup-id", "a1234"],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: false,
+        backup_id: "a1234",
+        additional_args: "",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
+  it "passes backup_url when --backup-url is specified" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      [
+        "restore", "production",
+        "--backup-url", "https://example.com/backup.dump"
+      ],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: false,
+        backup_url: "https://example.com/backup.dump",
+        additional_args: "",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
+  it "passes backup_id with parallelize and strips flag from additional args" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      [
+        "restore", "production",
+        "--backup-id", "b5678",
+        "--parallelize"
+      ],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: true,
+        backup_id: "b5678",
+        additional_args: "",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
+  it "passes backup_url with parallelize & strips flag from additional args" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      [
+        "restore", "production",
+        "--backup-url", "https://example.com/dump",
+        "--parallelize"
+      ],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: true,
+        backup_url: "https://example.com/dump",
+        additional_args: "",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
+  it "does not include --backup-id or its value in additional_args" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      ["restore", "production", "--backup-id", "a1234", "--verbose"],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: false,
+        backup_id: "a1234",
+        additional_args: "--verbose",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
+  it "does not include --backup-url or its value in additional_args" do
+    backup = stub_parity_backup
+    allow(Parity::Backup).to receive(:new).and_return(backup)
+
+    Parity::Environment.new(
+      "development",
+      [
+        "restore", "production",
+        "--backup-url", "https://example.com/backup.dump",
+        "--verbose"
+      ],
+    ).run
+
+    expect(Parity::Backup).to have_received(:new).
+      with(
+        from: "production",
+        to: "development",
+        parallelize: false,
+        backup_url: "https://example.com/backup.dump",
+        additional_args: "--verbose",
+      )
+    expect(backup).to have_received(:restore)
+  end
+
   it "opens the remote console" do
     Parity::Environment.new("production", ["console"]).run
 
